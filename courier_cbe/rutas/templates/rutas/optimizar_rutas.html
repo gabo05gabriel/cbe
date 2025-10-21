@@ -1,0 +1,287 @@
+{% load static %}
+
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <title>Optimización de Rutas - CBE</title>
+  <link rel="stylesheet" href="{% static 'css/base/_reset.css' %}">
+  <link rel="stylesheet" href="{% static 'css/main.css' %}">
+  <style>
+    body {
+      font-family: 'Segoe UI', sans-serif;
+      background: #f7f9fb;
+      margin: 0;
+      padding: 0;
+    }
+    h1 {
+      text-align: center;
+      color: #2c3e50;
+      margin-top: 25px;
+    }
+    #map {
+      height: 500px;
+      width: 90%;
+      margin: 20px auto;
+      border-radius: 10px;
+      border: 2px solid #ddd;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+    }
+    table {
+      width: 90%;
+      margin: 30px auto;
+      border-collapse: collapse;
+      font-size: 14px;
+      background-color: white;
+      border-radius: 8px;
+      overflow: hidden;
+    }
+    th, td {
+      border: 1px solid #ccc;
+      padding: 8px;
+      text-align: center;
+    }
+    th {
+      background-color: #007bff;
+      color: white;
+    }
+    .legend {
+      width: 90%;
+      margin: 10px auto;
+      font-size: 14px;
+    }
+    .legend span {
+      display: inline-block;
+      margin-right: 15px;
+      font-weight: 500;
+    }
+    .blue { color: blue; }
+    .red { color: red; }
+    .orange { color: orange; }
+    .info-card {
+      width: 90%;
+      margin: 25px auto;
+      background: #ffffff;
+      border: 1px solid #dcdcdc;
+      border-radius: 10px;
+      padding: 15px 20px;
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+      font-size: 14px;
+      line-height: 1.6;
+      color: #2c3e50;
+    }
+    .info-card h3 {
+      margin-top: 0;
+      color: #007bff;
+      font-weight: 600;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .info-card ul {
+      margin: 5px 0 0 20px;
+      padding: 0;
+    }
+    .info-card li {
+      margin-bottom: 4px;
+    }
+  </style>
+</head>
+<body>
+
+{% include 'includes/navbar.html' %}
+
+<h1>🗺️ Optimización de Rutas</h1>
+
+<div id="map"></div>
+
+<!-- Leyenda -->
+<div class="legend">
+  <span class="blue">● Ruta Google Maps</span>
+  <span class="red">● Ruta IA (Machine Learning - CBE Route AI)</span>
+  <span class="orange">M = Mensajero</span>
+  <span>R = Recojo</span>
+  <span>E = Envío</span>
+</div>
+
+<!-- Tabla comparativa -->
+<table>
+  <thead>
+    <tr>
+      <th>Tipo de Ruta</th>
+      <th>Duración (min)</th>
+      <th>Distancia (km)</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>Google Maps</td>
+      <td>{{ ruta_google.duracion|default:"--" }}</td>
+      <td>{{ ruta_google.distancia|default:"--" }}</td>
+    </tr>
+    <tr>
+      <td>IA (Machine Learning - CBE Route AI)</td>
+      <td>{{ ruta_algo.duracion|default:"--" }}</td>
+      <td>{{ ruta_algo.distancia|default:"--" }}</td>
+    </tr>
+  </tbody>
+</table>
+
+<!-- JSON con los datos -->
+<script id="rutas-data" type="application/json">
+  {
+    "google": {
+      "polyline": "{{ ruta_google.polyline|default_if_none:''|escapejs }}",
+      "duracion": "{{ ruta_google.duracion|default_if_none:'' }}",
+      "distancia": "{{ ruta_google.distancia|default_if_none:'' }}"
+    },
+    "algoritmo": {
+      "polyline": "{{ ruta_algo.polyline|default_if_none:''|escapejs }}",
+      "duracion": "{{ ruta_algo.duracion|default_if_none:'' }}",
+      "distancia": "{{ ruta_algo.distancia|default_if_none:'' }}"
+    },
+    "puntos": {{ puntos|safe }}
+  }
+</script>
+
+<script>
+function initMap() {
+  const center = { lat: -16.5, lng: -68.15 };
+  const map = new google.maps.Map(document.getElementById("map"), {
+    zoom: 12,
+    center: center
+  });
+
+  const data = JSON.parse(document.getElementById("rutas-data").textContent);
+
+  // ==================
+  // 🔹 Mostrar puntos (Mensajero, Recojo, Envío)
+  // ==================
+  if (data.puntos && data.puntos.length > 0) {
+    data.puntos.forEach(p => {
+      const markerOpts = {
+        position: { lat: p.lat, lng: p.lng },
+        map: map,
+        title: `${p.tipo} - ${p.id} (${p.direccion || ''})`
+      };
+
+      if (p.tipo === "Mensajero") {
+        markerOpts.label = "M";
+        markerOpts.icon = {
+          path: google.maps.SymbolPath.CIRCLE,
+          scale: 8,
+          fillColor: "orange",
+          fillOpacity: 1,
+          strokeColor: "white",
+          strokeWeight: 2
+        };
+      } else if (p.tipo === "Recojo") {
+        markerOpts.label = "R";
+        markerOpts.icon = { fillColor: "blue" };
+      } else if (p.tipo === "Envío") {
+        markerOpts.label = "E";
+        markerOpts.icon = { fillColor: "green" };
+      }
+
+      new google.maps.Marker(markerOpts);
+    });
+  }
+
+  // ==================
+  // 🔹 Decodificar polylines
+  // ==================
+  function decodePolyline(encoded) {
+    if (!encoded) return [];
+    let points = [];
+    let index = 0, len = encoded.length;
+    let lat = 0, lng = 0;
+
+    while (index < len) {
+      let b, shift = 0, result = 0;
+      do {
+        b = encoded.charCodeAt(index++) - 63;
+        result |= (b & 0x1f) << shift;
+        shift += 5;
+      } while (b >= 0x20);
+      const dlat = (result & 1) ? ~(result >> 1) : (result >> 1);
+      lat += dlat;
+
+      shift = 0;
+      result = 0;
+      do {
+        b = encoded.charCodeAt(index++) - 63;
+        result |= (b & 0x1f) << shift;
+        shift += 5;
+      } while (b >= 0x20);
+      const dlng = (result & 1) ? ~(result >> 1) : (result >> 1);
+      lng += dlng;
+
+      points.push({ lat: lat / 1e5, lng: lng / 1e5 });
+    }
+    return points;
+  }
+
+  // ==================
+  // 🔹 Dibujar rutas
+  // ==================
+  const googlePath = decodePolyline(data.google.polyline);
+  const algoPath = decodePolyline(data.algoritmo.polyline);
+
+  if (googlePath.length > 0) {
+    new google.maps.Polyline({
+      path: googlePath,
+      geodesic: true,
+      strokeColor: "blue",
+      strokeOpacity: 0.8,
+      strokeWeight: 5,
+      map: map
+    });
+  }
+
+  if (algoPath.length > 0) {
+    new google.maps.Polyline({
+      path: algoPath,
+      geodesic: true,
+      strokeColor: "red",
+      strokeOpacity: 0.8,
+      strokeWeight: 4,
+      map: map
+    });
+  }
+
+  // ==================
+  // 🔹 Ajustar mapa
+  // ==================
+  const bounds = new google.maps.LatLngBounds();
+  [...googlePath, ...algoPath].forEach(p => bounds.extend(p));
+  if (data.puntos) data.puntos.forEach(p => bounds.extend({ lat: p.lat, lng: p.lng }));
+
+  if (!bounds.isEmpty()) map.fitBounds(bounds);
+  else map.setCenter(center);
+}
+</script>
+
+<!-- Google Maps API -->
+<script src="https://maps.googleapis.com/maps/api/js?key=AIzaSyBN30lGA4NxW7R3OcIfK1DqxJmavBMAw1U&callback=initMap" async defer></script>
+
+<!-- 🔹 Información sobre rutas ML -->
+<div class="info-card">
+  <h3>🤖 Rutas utilizadas por el modelo CBE Route AI</h3>
+  <p>
+    El modelo de Machine Learning <strong>CBE Route AI</strong> fue entrenado con rutas reales de mensajeros
+    obtenidas desde la base de datos, combinadas con datos de tráfico y distancia de Google Maps.
+  </p>
+  {% if rutas_dias_ml %}
+  <p><strong>📅 Fechas reales utilizadas:</strong></p>
+  <ul>
+    {% for d in rutas_dias_ml %}
+      <li>🗓️ {{ d|date:"d/m/Y" }}</li>
+    {% endfor %}
+  </ul>
+  {% else %}
+  <p>⚠️ No se encontraron rutas reales registradas para este mensajero.</p>
+  {% endif %}
+</div>
+
+</body>
+</html>
