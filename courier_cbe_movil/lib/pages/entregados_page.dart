@@ -27,7 +27,7 @@ class _EntregadosPageState extends State<EntregadosPage> {
   }
 
   Future<void> _fetchEntregas() async {
-    final url = Uri.parse('http://127.0.0.1:8000/api/entregas-json/');
+    final url = Uri.parse('http://192.168.3.159:8000/api/entregas-json/');  // Corregida la URL
     try {
       final response = await http.get(url);
 

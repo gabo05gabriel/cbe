@@ -1,9 +1,14 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
-import 'package:geolocator/geolocator.dart';
+import 'package:geolocator/geolocator.dart' as geo;
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+import 'package:flutter_background_service/flutter_background_service.dart';
+import 'package:flutter_background_service_android/flutter_background_service_android.dart';
+
+// 🔹 Páginas
 import 'login_page.dart';
 import 'rutas_page.dart';
 import 'mensajeros_page.dart';
@@ -23,8 +28,9 @@ class _HomePageState extends State<HomePage> {
   Map<String, dynamic>? usuario;
   Map<String, dynamic>? dashboardData;
   bool _loading = true;
-  Timer? _ubicacionTimer;
-  bool _compartiendoUbicacion = false; // 👈 Estado actual del botón
+  bool _compartiendoUbicacion = false;
+
+  final String baseUrl = "http://192.168.3.159:8000"; // Cambia la URL por la de tu backend
 
   @override
   void initState() {
@@ -32,12 +38,7 @@ class _HomePageState extends State<HomePage> {
     _cargarUsuario();
   }
 
-  @override
-  void dispose() {
-    _ubicacionTimer?.cancel();
-    super.dispose();
-  }
-
+  // Cargar los datos del usuario desde almacenamiento seguro
   Future<void> _cargarUsuario() async {
     final data = await storage.readAll();
     if (data.containsKey('id')) {
@@ -48,6 +49,7 @@ class _HomePageState extends State<HomePage> {
         'rol': data['rol'],
         'is_active': data['is_active'] == 'true',
       };
+
       if (usuario?['rol'] == 'Administrador') {
         await _fetchDashboardData();
       } else {
@@ -58,22 +60,89 @@ class _HomePageState extends State<HomePage> {
     }
   }
 
+  // Obtener los datos del dashboard desde el backend
   Future<void> _fetchDashboardData() async {
     try {
-      final url = Uri.parse('http://127.0.0.1:8000/usuarios/home_data/');
+      final url = Uri.parse('$baseUrl/usuarios/home_data/');
       final response = await http.get(url);
       if (response.statusCode == 200) {
         setState(() {
           dashboardData = jsonDecode(response.body);
           _loading = false;
         });
+      } else {
+        debugPrint('Error al cargar dashboard: ${response.statusCode}');
+        setState(() => _loading = false);
       }
     } catch (e) {
-      print('⚠️ Error al cargar dashboard: $e');
+      debugPrint('⚠️ Error al cargar dashboard: $e');
+      setState(() => _loading = false);
     }
   }
 
-  /// 🔁 Inicia o detiene el rastreo automático
+  // =====================================================
+  // 📍 SERVICIO DE UBICACIÓN EN SEGUNDO PLANO
+  // =====================================================
+
+  // Iniciar el seguimiento de ubicación
+  Future<void> _iniciarTracking() async {
+    bool serviceEnabled = await geo.Geolocator.isLocationServiceEnabled();
+    if (!serviceEnabled) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Activa la ubicación en tu dispositivo.')),
+      );
+      return;
+    }
+
+    geo.LocationPermission permission = await geo.Geolocator.requestPermission();
+    if (permission == geo.LocationPermission.denied ||
+        permission == geo.LocationPermission.deniedForever) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Permiso de ubicación denegado')),
+      );
+      return;
+    }
+
+    await _iniciarServicio();
+
+    setState(() => _compartiendoUbicacion = true);
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('🟢 Compartiendo ubicación en segundo plano')),
+    );
+  }
+
+  // Configurar el servicio para ejecutar en segundo plano
+  Future<void> _iniciarServicio() async {
+    final service = FlutterBackgroundService();
+
+    await service.configure(
+      androidConfiguration: AndroidConfiguration(
+        onStart: onStart,  // Función que maneja el servicio en segundo plano
+        autoStart: true,  // El servicio se inicia automáticamente
+        isForegroundMode: true,  // Mantén el servicio en primer plano
+        notificationChannelId: 'ubicacion_courier_channel',  // Canal de notificación
+        initialNotificationTitle: 'Courier Bolivian Express',
+        initialNotificationContent: 'Compartiendo ubicación...',
+        foregroundServiceNotificationId: 999,  // ID de la notificación para primer plano
+      ),
+      iosConfiguration: IosConfiguration(),
+    );
+
+    await service.startService();  // Inicia el servicio en primer plano
+    service.invoke('setUserId', {'id': usuario?['id']});  // Establece el ID del usuario
+  }
+
+  // Detener el seguimiento de ubicación
+  Future<void> _detenerTracking() async {
+    final service = FlutterBackgroundService();
+    service.invoke('stopService');
+    setState(() => _compartiendoUbicacion = false);
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('🔴 Se detuvo el envío de ubicación')),
+    );
+  }
+
+  // Cambiar entre iniciar y detener el seguimiento
   void _toggleTracking() {
     if (_compartiendoUbicacion) {
       _detenerTracking();
@@ -82,81 +151,9 @@ class _HomePageState extends State<HomePage> {
     }
   }
 
-  void _iniciarTracking() {
-    _ubicacionTimer?.cancel();
-    _mandarUbicacion(auto: true); // envía una vez inmediatamente
-    _ubicacionTimer = Timer.periodic(const Duration(seconds: 5), (_) {
-      _mandarUbicacion(auto: true);
-    });
-
-    setState(() => _compartiendoUbicacion = true);
-
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('🟢 Compartiendo ubicación cada 5 segundos')),
-    );
-  }
-
-  void _detenerTracking() {
-    _ubicacionTimer?.cancel();
-    setState(() => _compartiendoUbicacion = false);
-
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('🔴 Dejó de compartir ubicación')),
-    );
-  }
-
-  /// 📡 Envía la ubicación del mensajero
-  Future<void> _mandarUbicacion({bool auto = false}) async {
-    try {
-      bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
-      if (!serviceEnabled) {
-        if (!auto) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Activa la ubicación')),
-          );
-        }
-        return;
-      }
-
-      LocationPermission permission = await Geolocator.requestPermission();
-      if (permission == LocationPermission.denied ||
-          permission == LocationPermission.deniedForever) {
-        if (!auto) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Permiso de ubicación denegado')),
-          );
-        }
-        return;
-      }
-
-      Position pos = await Geolocator.getCurrentPosition(
-          desiredAccuracy: LocationAccuracy.best);
-
-      final url =
-          Uri.parse('http://127.0.0.1:8000/usuarios/actualizar_ubicacion/');
-      final int usuarioId = usuario?['id'] ?? 0;
-
-      final response = await http.post(
-        url,
-        headers: {'Content-Type': 'application/json'},
-        body: jsonEncode({
-          'usuario_id': usuarioId,
-          'latitud': pos.latitude,
-          'longitud': pos.longitude,
-        }),
-      );
-
-      if (response.statusCode == 200 && !auto) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('📍 Ubicación enviada correctamente')),
-        );
-      } else if (response.statusCode != 200) {
-        print('❌ Error al enviar ubicación: ${response.body}');
-      }
-    } catch (e) {
-      print('⚠️ Error al mandar ubicación: $e');
-    }
-  }
+  // =====================================================
+  // 🔹 INTERFAZ (UI)
+  // =====================================================
 
   @override
   Widget build(BuildContext context) {
@@ -177,7 +174,7 @@ class _HomePageState extends State<HomePage> {
             icon: const Icon(Icons.logout),
             onPressed: () async {
               await storage.deleteAll();
-              _ubicacionTimer?.cancel();
+              if (_compartiendoUbicacion) await _detenerTracking();
               if (!context.mounted) return;
               Navigator.pushReplacement(
                 context,
@@ -189,17 +186,15 @@ class _HomePageState extends State<HomePage> {
       ),
       drawer: _buildDrawer(context, rol),
       body: _loading
-          ? const Center(
-              child: CircularProgressIndicator(color: Colors.orange),
-            )
+          ? const Center(child: CircularProgressIndicator(color: Colors.orange))
           : rol == 'Administrador'
               ? _buildDashboard()
               : _buildMensajero(),
     );
   }
 
-  /// 🔹 Menú lateral (Drawer)
-  Widget _buildDrawer(BuildContext context, String rol) {
+  // Construir el menú lateral (Drawer)
+  Drawer _buildDrawer(BuildContext context, String rol) {
     return Drawer(
       child: ListView(
         padding: EdgeInsets.zero,
@@ -230,64 +225,27 @@ class _HomePageState extends State<HomePage> {
             ),
           ),
           if (rol == 'Administrador') ...[
-            _menuItem(
-              icon: Icons.dashboard,
-              title: 'Dashboard',
-              onTap: () => Navigator.pushReplacement(
-                context,
-                MaterialPageRoute(builder: (_) => const HomePage()),
-              ),
-            ),
-            _menuItem(
-              icon: Icons.route,
-              title: 'Rutas',
-              onTap: () => Navigator.pushReplacement(
-                context,
-                MaterialPageRoute(builder: (_) => const RutasPage()),
-              ),
-            ),
-            _menuItem(
-              icon: Icons.person_pin_circle,
-              title: 'Mensajeros',
-              onTap: () => Navigator.pushReplacement(
-                context,
-                MaterialPageRoute(builder: (_) => const MensajerosPage()),
-              ),
-            ),
-            _menuItem(
-              icon: Icons.local_shipping,
-              title: 'Envíos',
-              onTap: () => Navigator.pushReplacement(
-                context,
-                MaterialPageRoute(builder: (_) => const EnviosPage()),
-              ),
-            ),
-            _menuItem(
-              icon: Icons.check_circle_outline,
-              title: 'Entregados',
-              onTap: () => Navigator.pushReplacement(
-                context,
-                MaterialPageRoute(builder: (_) => const EntregadosPage()),
-              ),
-            ),
-            _menuItem(
-              icon: Icons.pending_actions,
-              title: 'Envíos Pendientes',
-              onTap: () => Navigator.pushReplacement(
-                context,
-                MaterialPageRoute(
-                    builder: (_) => const EnviosPendientesPage()),
-              ),
-            ),
+            _menuItem(Icons.dashboard, 'Dashboard',
+                () => Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => const HomePage()))),
+            _menuItem(Icons.route, 'Rutas',
+                () => Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => const RutasPage()))),
+            _menuItem(Icons.person_pin_circle, 'Mensajeros',
+                () => Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => const MensajerosPage()))),
+            _menuItem(Icons.local_shipping, 'Envíos',
+                () => Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => const EnviosPage()))),
+            _menuItem(Icons.check_circle_outline, 'Entregados',
+                () => Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => const EntregadosPage()))),
+            _menuItem(Icons.pending_actions, 'Envíos Pendientes',
+                () => Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => const EnviosPendientesPage()))),
           ] else ...[
             _menuItem(
-              icon: _compartiendoUbicacion
+              _compartiendoUbicacion
                   ? Icons.stop_circle
                   : Icons.play_circle_fill,
-              title: _compartiendoUbicacion
+              _compartiendoUbicacion
                   ? 'Dejar de compartir ubicación'
                   : 'Compartir ubicación',
-              onTap: _toggleTracking,
+              _toggleTracking,
             ),
           ],
         ],
@@ -295,12 +253,8 @@ class _HomePageState extends State<HomePage> {
     );
   }
 
-  /// 🔹 Item reutilizable del menú
-  Widget _menuItem({
-    required IconData icon,
-    required String title,
-    required VoidCallback onTap,
-  }) {
+  // Elementos del menú lateral
+  Widget _menuItem(IconData icon, String title, VoidCallback onTap) {
     return ListTile(
       leading: Icon(icon, color: const Color(0xFFD47B2C)),
       title: Text(title),
@@ -308,7 +262,7 @@ class _HomePageState extends State<HomePage> {
     );
   }
 
-  /// 🔹 Vista del mensajero
+  // Construir la interfaz del mensajero
   Widget _buildMensajero() {
     return Center(
       child: ElevatedButton.icon(
@@ -316,8 +270,7 @@ class _HomePageState extends State<HomePage> {
           backgroundColor:
               _compartiendoUbicacion ? Colors.redAccent : Colors.orange,
           padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
-          shape:
-              RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
         ),
         onPressed: _toggleTracking,
         icon: Icon(
@@ -334,26 +287,25 @@ class _HomePageState extends State<HomePage> {
     );
   }
 
-  /// 🔹 Vista del Dashboard (solo Admin)
+  // Construir el dashboard para el administrador
   Widget _buildDashboard() {
     return RefreshIndicator(
       onRefresh: _fetchDashboardData,
       child: SingleChildScrollView(
+        physics: const AlwaysScrollableScrollPhysics(),
         padding: const EdgeInsets.all(16),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Text(
-              'Resumen general',
-              style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
-            ),
+            const Text('Resumen general',
+                style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold)),
             const SizedBox(height: 16),
             GridView.count(
               shrinkWrap: true,
+              physics: const NeverScrollableScrollPhysics(),
               crossAxisCount: 2,
               crossAxisSpacing: 16,
               mainAxisSpacing: 16,
-              physics: const NeverScrollableScrollPhysics(),
               children: [
                 _buildCard('Usuarios',
                     dashboardData?['usuarios_count']?.toString() ?? '0',
@@ -369,20 +321,13 @@ class _HomePageState extends State<HomePage> {
                     Icons.check_circle, Colors.teal),
               ],
             ),
-            const SizedBox(height: 32),
-            Center(
-              child: Text(
-                'Actualizado ${DateTime.now().toLocal()}',
-                style: const TextStyle(color: Colors.grey, fontSize: 12),
-              ),
-            ),
           ],
         ),
       ),
     );
   }
 
-  /// 🔹 Tarjeta individual del Dashboard
+  // Crear tarjeta para el dashboard
   Widget _buildCard(String title, String value, IconData icon, Color color) {
     return Card(
       elevation: 4,
@@ -394,19 +339,66 @@ class _HomePageState extends State<HomePage> {
           children: [
             Icon(icon, color: color, size: 40),
             const SizedBox(height: 10),
-            Text(
-              value,
-              style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
-            ),
+            Text(value,
+                style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold)),
             const SizedBox(height: 8),
-            Text(
-              title,
-              textAlign: TextAlign.center,
-              style: const TextStyle(color: Colors.grey, fontSize: 14),
-            ),
+            Text(title,
+                textAlign: TextAlign.center,
+                style: const TextStyle(color: Colors.grey, fontSize: 14)),
           ],
         ),
       ),
     );
   }
+}
+
+// =====================================================
+// 🛰️ FUNCIÓN GLOBAL DE SERVICIO EN SEGUNDO PLANO
+// =====================================================
+@pragma('vm:entry-point')
+Future<void> onStart(ServiceInstance service) async {
+  WidgetsFlutterBinding.ensureInitialized();
+
+  if (service is AndroidServiceInstance) {
+    service.on('stopService').listen((event) => service.stopSelf());
+  }
+
+  int userId = 0;
+  service.on('setUserId').listen((event) {
+    userId = event?['id'] ?? 0;
+  });
+
+  bool serviceEnabled = await geo.Geolocator.isLocationServiceEnabled();
+  if (!serviceEnabled) return;
+
+  geo.LocationPermission permission = await geo.Geolocator.checkPermission();
+  if (permission == geo.LocationPermission.denied ||
+      permission == geo.LocationPermission.deniedForever) {
+    permission = await geo.Geolocator.requestPermission();
+    if (permission == geo.LocationPermission.denied ||
+        permission == geo.LocationPermission.deniedForever) return;
+  }
+
+  Timer.periodic(const Duration(seconds: 10), (timer) async {
+    try {
+      geo.Position position = await geo.Geolocator.getCurrentPosition(
+          desiredAccuracy: geo.LocationAccuracy.high);
+
+      const String apiUrl =
+          "http://192.168.3.159:8000/usuarios/actualizar_ubicacion/";
+
+      await http.post(
+        Uri.parse(apiUrl),
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({
+          'usuario_id': userId > 0 ? userId : 1,
+          'latitud': position.latitude,
+          'longitud': position.longitude,
+        }),
+      );
+      debugPrint("✅ Ubicación enviada: (${position.latitude}, ${position.longitude})");
+    } catch (e) {
+      debugPrint("⚠️ Error enviando ubicación: $e");
+    }
+  });
 }

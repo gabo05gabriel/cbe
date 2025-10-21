@@ -27,7 +27,7 @@ class _EnviosPendientesPageState extends State<EnviosPendientesPage> {
   }
 
   Future<void> _fetchEnviosPendientes() async {
-    final url = Uri.parse('http://127.0.0.1:8000/api/envios-pendientes-json/');
+    final url = Uri.parse('http://192.168.3.159:8000/api/envios-pendientes-json/'); // Corregido URL
     try {
       final response = await http.get(url);
       if (response.statusCode == 200) {

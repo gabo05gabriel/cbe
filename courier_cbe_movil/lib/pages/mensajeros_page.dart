@@ -110,7 +110,7 @@ class _MensajerosPageState extends State<MensajerosPage> {
 
   Future<void> _fetchMensajeros() async {
     try {
-      final url = Uri.parse('http://127.0.0.1:8000/usuarios/mensajeros-json/');
+      final url = Uri.parse('http://192.168.3.159:8000/usuarios/mensajeros-json/');
       final response = await http.get(url);
 
       if (response.statusCode == 200) {
@@ -251,17 +251,6 @@ class _MensajerosPageState extends State<MensajerosPage> {
               Navigator.pushReplacement(
                 context,
                 MaterialPageRoute(builder: (_) => const RutasPage()),
-              );
-            },
-          ),
-          ListTile(
-            leading: const Icon(Icons.person_pin_circle, color: Colors.teal),
-            title: const Text('Mensajeros'),
-            tileColor: Colors.teal.withOpacity(0.1),
-            onTap: () {
-              Navigator.pushReplacement(
-                context,
-                MaterialPageRoute(builder: (_) => const MensajerosPage()),
               );
             },
           ),

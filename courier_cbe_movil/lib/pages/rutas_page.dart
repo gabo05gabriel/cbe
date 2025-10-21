@@ -26,7 +26,7 @@ class _RutasPageState extends State<RutasPage> {
   Set<Polyline> _polylines = {};
   Set<Marker> _markers = {};
 
-  final String baseUrl = "http://127.0.0.1:8000/rutas/api"; // 👈 Base API
+  final String baseUrl = "http://192.168.3.159:8000/rutas/api"; // Asegúrate de que la URL esté correcta
 
   @override
   void initState() {
@@ -42,10 +42,10 @@ class _RutasPageState extends State<RutasPage> {
     final rol = auth.usuario?['rol']?.toString().toLowerCase() ?? '';
 
     if (rol == 'mensajero') {
-      // Mensajero → carga directamente su ruta
+      // Si es mensajero → carga directamente su ruta
       await _fetchRutaMensajero(auth.usuario!['id'].toString());
     } else {
-      // Admin → muestra lista de mensajeros
+      // Si es administrador → muestra lista de mensajeros
       await _fetchMensajeros();
     }
   }
@@ -186,7 +186,8 @@ class _RutasPageState extends State<RutasPage> {
             },
           ),
           ListTile(
-            leading: const Icon(Icons.check_circle_outline, color: Colors.green),
+            leading:
+                const Icon(Icons.check_circle_outline, color: Colors.green),
             title: const Text('Entregados'),
             onTap: () {
               Navigator.pushReplacement(
@@ -201,7 +202,8 @@ class _RutasPageState extends State<RutasPage> {
             onTap: () {
               Navigator.pushReplacement(
                 context,
-                MaterialPageRoute(builder: (_) => const EnviosPendientesPage()),
+                MaterialPageRoute(
+                    builder: (_) => const EnviosPendientesPage()),
               );
             },
           ),
@@ -237,7 +239,7 @@ class _RutasPageState extends State<RutasPage> {
                       ),
                       value: _selectedMensajeroId,
                       items: _mensajeros
-                          .map((m) => DropdownMenuItem<String>(
+                          .map((m) => DropdownMenuItem<String>( 
                                 value: m['id'].toString(),
                                 child: Text(m['nombre']),
                               ))

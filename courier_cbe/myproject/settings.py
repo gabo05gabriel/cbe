@@ -21,7 +21,8 @@ ALLOWED_HOSTS = [
     '0.0.0.0',
     '192.168.3.184', 
     '192.168.21.143',
-    'ira-kitcheny-barbra.ngrok-free.dev', # 👈 tu IP local (según ipconfig)
+    'ira-kitcheny-barbra.ngrok-free.dev',
+     '192.168.3.159', # 👈 tu IP local (según ipconfig)
 ]
 
 # ------------------------------------------------------------------------------
@@ -161,6 +162,7 @@ CSRF_TRUSTED_ORIGINS = [
     'http://127.0.0.1:5500',
     # 👇 tu IP local de red (para conexión desde Android físico)
     'http://192.168.3.184:8000',
+    'http://192.168.3.159:8000',
 ]
 
 # ------------------------------------------------------------------------------

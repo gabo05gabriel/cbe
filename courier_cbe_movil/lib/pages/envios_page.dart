@@ -19,7 +19,7 @@ class EnviosPage extends StatefulWidget {
 }
 
 class _EnviosPageState extends State<EnviosPage> {
-  final String baseUrl = "http://127.0.0.1:8000/api";
+  final String baseUrl = "http://192.168.3.159:8000/api"; // Asegúrate de que la URL sea correcta
   bool _loading = true;
   List<dynamic> _envios = [];
 
