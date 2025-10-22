@@ -1,4 +1,3 @@
-import 'dart:io';
 
 String getBaseUrl() {
   // Usa siempre la IP local directamente

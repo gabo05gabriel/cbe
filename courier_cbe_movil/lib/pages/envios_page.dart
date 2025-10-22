@@ -49,11 +49,11 @@ class _EnviosPageState extends State<EnviosPage> {
   Future<void> _abrirDialogEntrega(Map<String, dynamic> envio) async {
     File? firmaFile;
     final picker = ImagePicker();
-    final _formKey = GlobalKey<FormState>();
-    String? _estado = "Entregado";
-    bool _pagado = false;
-    String? _tipoIncidencia;
-    String? _descripcionIncidencia;
+    final formKey = GlobalKey<FormState>();
+    String? estado = "Entregado";
+    bool pagado = false;
+    String? tipoIncidencia;
+    String? descripcionIncidencia;
 
     await showDialog(
       context: context,
@@ -65,12 +65,12 @@ class _EnviosPageState extends State<EnviosPage> {
             title: Text("Registrar entrega\n#${envio['id']}"),
             content: SingleChildScrollView(
               child: Form(
-                key: _formKey,
+                key: formKey,
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     DropdownButtonFormField<String>(
-                      value: _estado,
+                      initialValue: estado,
                       decoration:
                           const InputDecoration(labelText: "Estado del envío"),
                       items: const [
@@ -80,11 +80,11 @@ class _EnviosPageState extends State<EnviosPage> {
                             value: "No entregado",
                             child: Text("No entregado")),
                       ],
-                      onChanged: (val) => setState(() => _estado = val),
+                      onChanged: (val) => setState(() => estado = val),
                     ),
                     CheckboxListTile(
-                      value: _pagado,
-                      onChanged: (val) => setState(() => _pagado = val!),
+                      value: pagado,
+                      onChanged: (val) => setState(() => pagado = val!),
                       title: const Text("Pagado"),
                       controlAffinity: ListTileControlAffinity.leading,
                     ),
@@ -111,12 +111,12 @@ class _EnviosPageState extends State<EnviosPage> {
                     TextFormField(
                       decoration:
                           const InputDecoration(labelText: "Tipo de incidencia"),
-                      onChanged: (val) => _tipoIncidencia = val,
+                      onChanged: (val) => tipoIncidencia = val,
                     ),
                     TextFormField(
                       decoration:
                           const InputDecoration(labelText: "Descripción"),
-                      onChanged: (val) => _descripcionIncidencia = val,
+                      onChanged: (val) => descripcionIncidencia = val,
                     ),
                   ],
                 ),
@@ -131,8 +131,8 @@ class _EnviosPageState extends State<EnviosPage> {
                     ElevatedButton.styleFrom(backgroundColor: Colors.green[700]),
                 onPressed: () async {
                   Navigator.pop(context);
-                  await _registrarEntrega(envio['id'], _estado!, _pagado,
-                      firmaFile, _tipoIncidencia, _descripcionIncidencia);
+                  await _registrarEntrega(envio['id'], estado!, pagado,
+                      firmaFile, tipoIncidencia, descripcionIncidencia);
                 },
                 child: const Text("Guardar"),
               ),

@@ -89,16 +89,16 @@ class _MensajerosPageState extends State<MensajerosPage> {
     paint.color = Colors.grey.shade400;
     paint.strokeWidth = 1.3;
     canvas.drawLine(
-      Offset(ancho / 2, altoEtiqueta),
-      Offset(ancho / 2, altoEtiqueta + 8),
+      const Offset(ancho / 2, altoEtiqueta),
+      const Offset(ancho / 2, altoEtiqueta + 8),
       paint,
     );
 
     // === Marcador circular naranja pequeño ===
     paint.color = const Color(0xFFD47B2C);
-    canvas.drawCircle(Offset(ancho / 2, altoEtiqueta + 16), 8, paint);
+    canvas.drawCircle(const Offset(ancho / 2, altoEtiqueta + 16), 8, paint);
     paint.color = Colors.white;
-    canvas.drawCircle(Offset(ancho / 2, altoEtiqueta + 16), 3, paint);
+    canvas.drawCircle(const Offset(ancho / 2, altoEtiqueta + 16), 3, paint);
 
     final picture = recorder.endRecording();
     final image = await picture.toImage(ancho.toInt(), altoTotal.toInt());

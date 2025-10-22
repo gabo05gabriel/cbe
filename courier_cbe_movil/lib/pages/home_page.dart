@@ -376,7 +376,9 @@ Future<void> onStart(ServiceInstance service) async {
       permission == geo.LocationPermission.deniedForever) {
     permission = await geo.Geolocator.requestPermission();
     if (permission == geo.LocationPermission.denied ||
-        permission == geo.LocationPermission.deniedForever) return;
+        permission == geo.LocationPermission.deniedForever) {
+      return;
+    }
   }
 
   Timer.periodic(const Duration(seconds: 10), (timer) async {

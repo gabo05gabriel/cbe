@@ -237,7 +237,7 @@ class _RutasPageState extends State<RutasPage> {
                         labelText: 'Seleccionar mensajero',
                         border: OutlineInputBorder(),
                       ),
-                      value: _selectedMensajeroId,
+                      initialValue: _selectedMensajeroId,
                       items: _mensajeros
                           .map((m) => DropdownMenuItem<String>( 
                                 value: m['id'].toString(),
